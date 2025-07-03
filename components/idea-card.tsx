@@ -3,8 +3,8 @@ import { useSession } from "next-auth/react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { EditIdeaDialog } from "./edit-idea-dialog"
-import { CommentDialog } from "./comment-dialog"
+import { EditIdeaDialog } from "@/components/edit-idea-dialog"
+import { CommentDialog } from "@/components/comment-dialog"
 import { useToast } from "@/hooks/use-toast"
 import {
   AlertDialog,
@@ -17,8 +17,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  MessageSquare,
   ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
   MoreVertical,
   Pencil,
   Trash2,
@@ -59,7 +60,7 @@ interface IdeaCardProps {
 export function IdeaCard({ idea, onDelete, onUpdate }: IdeaCardProps) {
   const { data: session } = useSession()
   const { toast } = useToast()
-  const [isLiked, setIsLiked] = useState(
+  const [isLiked, setIsLiked] = useState(() =>
     idea.likes.some((like) => like.userId === session?.user?.id)
   )
   const [likesCount, setLikesCount] = useState(idea._count.likes)
@@ -80,17 +81,18 @@ export function IdeaCard({ idea, onDelete, onUpdate }: IdeaCardProps) {
 
     try {
       const response = await fetch(`/api/ideas/${idea.id}/like`, {
-        method: isLiked ? "DELETE" : "POST",
+        method: "POST",
       })
 
       if (!response.ok) throw new Error("Failed to update like")
 
-      setIsLiked(!isLiked)
-      setLikesCount((prev) => (isLiked ? prev - 1 : prev + 1))
+      const { liked } = await response.json()
+      setIsLiked(liked)
+      setLikesCount((prev) => (liked ? prev + 1 : prev - 1))
 
       toast({
         title: "Success",
-        description: isLiked ? "Like removed" : "Idea liked",
+        description: liked ? "Idea liked" : "Like removed",
       })
     } catch (error) {
       console.error("Error updating like:", error)
@@ -239,6 +241,7 @@ export function IdeaCard({ idea, onDelete, onUpdate }: IdeaCardProps) {
         idea={idea}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
+        onUpdate={onUpdate}
       />
 
       <CommentDialog

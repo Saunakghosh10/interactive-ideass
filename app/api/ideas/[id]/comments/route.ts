@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import prisma from '@/lib/db/client'
+import { prisma } from '@/lib/db/client'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 
 // GET comments for an idea
@@ -9,46 +9,24 @@ export async function GET(
   context: { params: { id: string } }
 ) {
   try {
-    const ideaId = context.params.id
-    const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
-    const skip = (page - 1) * limit
+    const { params } = context
+    const ideaId = params.id
 
     const comments = await prisma.comment.findMany({
-      where: {
-        ideaId,
-      },
+      where: { ideaId },
       include: {
         author: {
           select: {
+            id: true,
             name: true,
             image: true,
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      skip,
-      take: limit,
+      orderBy: { createdAt: 'desc' },
     })
 
-    const total = await prisma.comment.count({
-      where: {
-        ideaId,
-      },
-    })
-
-    return NextResponse.json({
-      comments,
-      pagination: {
-        total,
-        pages: Math.ceil(total / limit),
-        page,
-        limit,
-      },
-    })
+    return NextResponse.json(comments)
   } catch (error) {
     console.error('Error fetching comments:', error)
     return NextResponse.json(
@@ -65,11 +43,12 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const ideaId = context.params.id
+    const { params } = context
+    const ideaId = params.id
     const { content } = await request.json()
 
     if (!content?.trim()) {
@@ -81,13 +60,14 @@ export async function POST(
 
     const comment = await prisma.comment.create({
       data: {
-        content,
+        content: content.trim(),
         authorId: session.user.id,
         ideaId,
       },
       include: {
         author: {
           select: {
+            id: true,
             name: true,
             image: true,
           },
@@ -100,6 +80,54 @@ export async function POST(
     console.error('Error creating comment:', error)
     return NextResponse.json(
       { error: 'Failed to create comment' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: { id: string; commentId: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const { params } = context
+    const { commentId } = params
+
+    const comment = await prisma.comment.findUnique({
+      where: { id: commentId },
+    })
+
+    if (!comment) {
+      return NextResponse.json(
+        { error: 'Comment not found' },
+        { status: 404 }
+      )
+    }
+
+    if (comment.authorId !== session.user.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 403 }
+      )
+    }
+
+    await prisma.comment.delete({
+      where: { id: commentId },
+    })
+
+    return NextResponse.json({ message: 'Comment deleted successfully' })
+  } catch (error) {
+    console.error('Error deleting comment:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete comment' },
       { status: 500 }
     )
   }

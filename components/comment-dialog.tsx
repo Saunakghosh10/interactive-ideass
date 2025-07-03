@@ -11,13 +11,24 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Trash2 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 interface Comment {
   id: string
   content: string
   createdAt: string
   author: {
+    id: string
     name: string | null
     image: string | null
   }
@@ -25,47 +36,40 @@ interface Comment {
 
 interface CommentDialogProps {
   ideaId: string
-  isOpen: boolean
-  onClose: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onCommentAdded?: () => void
+  onCommentDeleted?: () => void
 }
 
 export function CommentDialog({
   ideaId,
-  isOpen,
-  onClose,
+  open,
+  onOpenChange,
   onCommentAdded,
+  onCommentDeleted,
 }: CommentDialogProps) {
   const { data: session } = useSession()
   const { toast } = useToast()
-  const [newComment, setNewComment] = useState('')
   const [comments, setComments] = useState<Comment[]>([])
+  const [newComment, setNewComment] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const limit = 10
+  const [deleteCommentId, setDeleteCommentId] = useState<string | null>(null)
 
-  const fetchComments = async (pageNum: number) => {
+  const fetchComments = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch(
-        `/api/ideas/${ideaId}/comments?page=${pageNum}&limit=${limit}`
-      )
-      if (!response.ok) throw new Error('Failed to fetch comments')
+      const response = await fetch(`/api/ideas/${ideaId}/comments`)
+      if (!response.ok) throw new Error("Failed to fetch comments")
       const data = await response.json()
-      if (pageNum === 1) {
-        setComments(data.comments)
-      } else {
-        setComments((prev) => [...prev, ...data.comments])
-      }
-      setHasMore(data.pagination.page < data.pagination.pages)
+      setComments(Array.isArray(data) ? data : [])
     } catch (error) {
-      console.error('Error fetching comments:', error)
+      console.error("Error fetching comments:", error)
       toast({
-        title: 'Error',
-        description: 'Failed to load comments',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to load comments",
+        variant: "destructive",
       })
     } finally {
       setIsLoading(false)
@@ -73,35 +77,26 @@ export function CommentDialog({
   }
 
   useEffect(() => {
-    if (isOpen) {
-      setPage(1)
-      fetchComments(1)
+    if (open) {
+      fetchComments()
     }
-  }, [isOpen, ideaId])
-
-  const handleLoadMore = () => {
-    if (!isLoading && hasMore) {
-      const nextPage = page + 1
-      setPage(nextPage)
-      fetchComments(nextPage)
-    }
-  }
+  }, [open, ideaId])
 
   const handleSubmit = async () => {
-    if (!session) {
+    if (!session?.user) {
       toast({
-        title: 'Error',
-        description: 'You must be logged in to comment',
-        variant: 'destructive',
+        title: "Error",
+        description: "You must be logged in to comment",
+        variant: "destructive",
       })
       return
     }
 
     if (!newComment.trim()) {
       toast({
-        title: 'Error',
-        description: 'Comment cannot be empty',
-        variant: 'destructive',
+        title: "Error",
+        description: "Comment cannot be empty",
+        variant: "destructive",
       })
       return
     }
@@ -109,106 +104,183 @@ export function CommentDialog({
     try {
       setIsSubmitting(true)
       const response = await fetch(`/api/ideas/${ideaId}/comments`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content: newComment }),
+        body: JSON.stringify({
+          content: newComment.trim(),
+        }),
       })
 
-      if (!response.ok) throw new Error('Failed to post comment')
+      if (!response.ok) throw new Error("Failed to add comment")
 
       const comment = await response.json()
-      setComments((prev) => [comment, ...prev])
-      setNewComment('')
+      setComments((prev) => [comment, ...(Array.isArray(prev) ? prev : [])])
+      setNewComment("")
       onCommentAdded?.()
 
       toast({
-        title: 'Success',
-        description: 'Comment posted successfully',
+        title: "Success",
+        description: "Comment added successfully",
       })
     } catch (error) {
-      console.error('Error posting comment:', error)
+      console.error("Error adding comment:", error)
       toast({
-        title: 'Error',
-        description: 'Failed to post comment',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to add comment",
+        variant: "destructive",
       })
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  const handleDelete = async (commentId: string) => {
+    try {
+      const response = await fetch(
+        `/api/ideas/${ideaId}/comments/${commentId}`,
+        {
+          method: "DELETE",
+        }
+      )
+
+      if (!response.ok) throw new Error("Failed to delete comment")
+
+      setComments((prev) =>
+        Array.isArray(prev)
+          ? prev.filter((comment) => comment.id !== commentId)
+          : []
+      )
+      onCommentDeleted?.()
+      setDeleteCommentId(null)
+
+      toast({
+        title: "Success",
+        description: "Comment deleted successfully",
+      })
+    } catch (error) {
+      console.error("Error deleting comment:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete comment",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-h-[80vh] sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Comments</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex gap-4">
-            <Textarea
-              placeholder="Add a comment..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              className="min-h-[100px]"
-            />
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !session}
-              className="self-start"
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                'Post'
-              )}
-            </Button>
-          </div>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Comments</DialogTitle>
+          </DialogHeader>
 
-          <ScrollArea className="h-[400px] pr-4">
-            {comments.map((comment) => (
-              <div
-                key={comment.id}
-                className="mb-4 flex gap-4 rounded-lg border p-4"
-              >
-                <Avatar>
-                  <AvatarImage src={comment.author.image || undefined} />
-                  <AvatarFallback>
-                    {comment.author.name?.[0] || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">
-                      {comment.author.name || 'Anonymous'}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {new Date(comment.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-gray-700">{comment.content}</p>
-                </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Textarea
+                placeholder="Add a comment..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className="min-h-[100px]"
+                disabled={!session}
+              />
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !session}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Posting...
+                    </>
+                  ) : (
+                    "Post Comment"
+                  )}
+                </Button>
               </div>
-            ))}
+            </div>
 
-            {hasMore && (
-              <Button
-                variant="outline"
-                onClick={handleLoadMore}
-                disabled={isLoading}
-                className="mb-4 w-full"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Load More'
-                )}
-              </Button>
-            )}
-          </ScrollArea>
-        </div>
-      </DialogContent>
-    </Dialog>
+            <div className="space-y-4">
+              {isLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : comments.length > 0 ? (
+                comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="flex gap-4 p-4 rounded-lg bg-gray-50"
+                  >
+                    <img
+                      src={comment.author.image || "/placeholder-user.jpg"}
+                      alt={comment.author.name || "User"}
+                      className="w-10 h-10 rounded-full"
+                    />
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium">
+                            {comment.author.name || "Anonymous"}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(
+                              comment.createdAt
+                            ).toLocaleDateString()}
+                          </p>
+                        </div>
+                        {session?.user?.id === comment.author.id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteCommentId(comment.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <p className="mt-2 text-gray-700">
+                        {comment.content}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 py-4">
+                  No comments yet. Be the first to comment!
+                </p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!deleteCommentId}
+        onOpenChange={(open) => !open && setDeleteCommentId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Comment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this comment? This action cannot
+              be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteCommentId && handleDelete(deleteCommentId)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 } 
