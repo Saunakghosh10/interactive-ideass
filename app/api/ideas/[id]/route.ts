@@ -1,42 +1,53 @@
-import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import prisma from '@/lib/db/client'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { prisma } from "@/lib/db/client"
 
 // DELETE /api/ideas/[id]
 export async function DELETE(
-  req: Request,
+  request: NextRequest,
   context: { params: { id: string } }
 ) {
-  const { params } = context
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
+    const ideaId = context.params.id
+
+    // Check if user owns the idea
     const idea = await prisma.idea.findUnique({
-      where: { id: params.id },
+      where: { id: ideaId },
       select: { authorId: true },
     })
 
     if (!idea) {
-      return NextResponse.json({ error: 'Idea not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: "Idea not found" },
+        { status: 404 }
+      )
     }
 
     if (idea.authorId !== session.user.id) {
-      return NextResponse.json({ error: 'Unauthorized - You can only delete your own ideas' }, { status: 403 })
+      return NextResponse.json(
+        { error: "Not authorized to delete this idea" },
+        { status: 403 }
+      )
     }
 
     await prisma.idea.delete({
-      where: { id: params.id },
+      where: { id: ideaId },
     })
 
-    return NextResponse.json({ message: 'Idea deleted successfully' })
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting idea:', error)
+    console.error("Error deleting idea:", error)
     return NextResponse.json(
-      { error: 'Failed to delete idea' },
+      { error: "Failed to delete idea" },
       { status: 500 }
     )
   }
@@ -103,13 +114,14 @@ export async function PATCH(
 }
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   context: { params: { id: string } }
 ) {
-  const { params } = context
   try {
+    const ideaId = context.params.id
+
     const idea = await prisma.idea.findUnique({
-      where: { id: params.id },
+      where: { id: ideaId },
       include: {
         author: {
           select: {
@@ -150,10 +162,9 @@ export async function GET(
 }
 
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   context: { params: { id: string } }
 ) {
-  const { params } = context
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -163,8 +174,19 @@ export async function PUT(
       )
     }
 
+    const ideaId = context.params.id
+    const { title, description, skills, industries } = await request.json()
+
+    if (!title?.trim() || !description?.trim()) {
+      return NextResponse.json(
+        { error: "Title and description are required" },
+        { status: 400 }
+      )
+    }
+
+    // Check if user owns the idea
     const idea = await prisma.idea.findUnique({
-      where: { id: params.id },
+      where: { id: ideaId },
       select: { authorId: true },
     })
 
@@ -175,32 +197,20 @@ export async function PUT(
       )
     }
 
-    // Check if the user is the author of the idea
     if (idea.authorId !== session.user.id) {
       return NextResponse.json(
-        { error: "Unauthorized - You can only edit your own ideas" },
+        { error: "Not authorized to update this idea" },
         { status: 403 }
       )
     }
 
-    const body = await request.json()
-    const { title, description, skills, industries } = body
-
-    if (!title?.trim() || !description?.trim()) {
-      return NextResponse.json(
-        { error: "Title and description are required" },
-        { status: 400 }
-      )
-    }
-
     const updatedIdea = await prisma.idea.update({
-      where: { id: params.id },
+      where: { id: ideaId },
       data: {
         title: title.trim(),
         description: description.trim(),
         skills,
         industries,
-        updatedAt: new Date(),
       },
       include: {
         author: {
