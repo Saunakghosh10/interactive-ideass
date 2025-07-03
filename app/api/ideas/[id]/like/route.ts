@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db/client"
 
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -16,7 +16,9 @@ export async function POST(
       )
     }
 
-    const ideaId = context.params.id
+    // Await params before accessing properties
+    const params = await context.params
+    const ideaId = params.id
     const userId = session.user.id
 
     // Check if user already liked the idea
@@ -61,7 +63,7 @@ export async function POST(
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -72,7 +74,9 @@ export async function GET(
       )
     }
 
-    const ideaId = context.params.id
+    // Await params before accessing properties
+    const params = await context.params
+    const ideaId = params.id
     const userId = session.user.id
 
     const like = await prisma.like.findUnique({
@@ -96,7 +100,7 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -107,7 +111,8 @@ export async function DELETE(
       )
     }
 
-    const { params } = context
+    // Await params before accessing properties
+    const params = await context.params
     const ideaId = params.id
 
     const like = await prisma.like.findUnique({
@@ -143,4 +148,4 @@ export async function DELETE(
       { status: 500 }
     )
   }
-} 
+}

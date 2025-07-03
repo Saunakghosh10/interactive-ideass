@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db/client"
 // DELETE /api/ideas/[id]
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -17,7 +17,9 @@ export async function DELETE(
       )
     }
 
-    const ideaId = context.params.id
+    // Await params before accessing properties
+    const params = await context.params
+    const ideaId = params.id
 
     // Check if user owns the idea
     const idea = await prisma.idea.findUnique({
@@ -56,7 +58,7 @@ export async function DELETE(
 // PATCH /api/ideas/[id]
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -66,8 +68,12 @@ export async function PATCH(
 
     const { title, description, skills, industries } = await req.json()
 
+    // Await params before accessing properties
+    const params = await context.params
+    const ideaId = params.id
+
     const idea = await prisma.idea.findUnique({
-      where: { id: params.id },
+      where: { id: ideaId },
       select: { authorId: true },
     })
 
@@ -80,7 +86,7 @@ export async function PATCH(
     }
 
     const updatedIdea = await prisma.idea.update({
-      where: { id: params.id },
+      where: { id: ideaId },
       data: {
         title,
         description,
@@ -113,12 +119,15 @@ export async function PATCH(
   }
 }
 
+// GET /api/ideas/[id]
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const ideaId = context.params.id
+    // Await params before accessing properties
+    const params = await context.params
+    const ideaId = params.id
 
     const idea = await prisma.idea.findUnique({
       where: { id: ideaId },
@@ -161,9 +170,10 @@ export async function GET(
   }
 }
 
+// PUT /api/ideas/[id]
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -174,7 +184,9 @@ export async function PUT(
       )
     }
 
-    const ideaId = context.params.id
+    // Await params before accessing properties
+    const params = await context.params
+    const ideaId = params.id
     const { title, description, skills, industries } = await request.json()
 
     if (!title?.trim() || !description?.trim()) {
@@ -242,4 +254,4 @@ export async function PUT(
       { status: 500 }
     )
   }
-} 
+}
