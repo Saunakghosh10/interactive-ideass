@@ -1,15 +1,18 @@
-"use client"
-
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
-import { X, Plus, Lightbulb, Sparkles, Loader2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useToast } from '@/hooks/use-toast'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { X, Plus, Loader2 } from 'lucide-react'
 import {
   Command,
   CommandEmpty,
@@ -24,32 +27,63 @@ import {
 } from '@/components/ui/popover'
 import { SKILLS, INDUSTRIES } from '@/lib/constants'
 
-interface CreateIdeaDialogProps {
+interface EditIdeaDialogProps {
+  idea: {
+    id: string
+    title: string
+    description: string
+    skills: string[]
+    industries: string[]
+    author: {
+      id: string
+      name: string | null
+      image: string | null
+    }
+    likes: {
+      userId: string
+    }[]
+    _count: {
+      comments: number
+      likes: number
+    }
+    createdAt: string
+    updatedAt: string
+  }
   open: boolean
   onOpenChange: (open: boolean) => void
-  onIdeaCreated?: (idea: any) => void
+  onUpdate?: (updatedIdea: any) => void
 }
 
-export function CreateIdeaDialog({
+export function EditIdeaDialog({
+  idea,
   open,
   onOpenChange,
-  onIdeaCreated,
-}: CreateIdeaDialogProps) {
+  onUpdate,
+}: EditIdeaDialogProps) {
   const { data: session } = useSession()
   const { toast } = useToast()
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [skills, setSkills] = useState<string[]>([])
-  const [industries, setIndustries] = useState<string[]>([])
+  const [title, setTitle] = useState(idea.title)
+  const [description, setDescription] = useState(idea.description)
+  const [skills, setSkills] = useState<string[]>(idea.skills)
+  const [industries, setIndustries] = useState<string[]>(idea.industries)
   const [isSkillsOpen, setIsSkillsOpen] = useState(false)
   const [isIndustriesOpen, setIsIndustriesOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  useEffect(() => {
+    if (open) {
+      setTitle(idea.title)
+      setDescription(idea.description)
+      setSkills(idea.skills)
+      setIndustries(idea.industries)
+    }
+  }, [open, idea])
+
   const handleSubmit = async () => {
-    if (!session) {
+    if (!session?.user) {
       toast({
         title: 'Error',
-        description: 'You must be logged in to create ideas',
+        description: 'You must be logged in to edit ideas',
         variant: 'destructive',
       })
       return
@@ -66,8 +100,8 @@ export function CreateIdeaDialog({
 
     try {
       setIsSubmitting(true)
-      const response = await fetch('/api/ideas', {
-        method: 'POST',
+      const response = await fetch(`/api/ideas/${idea.id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -79,25 +113,21 @@ export function CreateIdeaDialog({
         }),
       })
 
-      if (!response.ok) throw new Error('Failed to create idea')
+      if (!response.ok) throw new Error('Failed to update idea')
 
-      const idea = await response.json()
-      onIdeaCreated?.(idea)
-      setTitle('')
-      setDescription('')
-      setSkills([])
-      setIndustries([])
+      const updatedIdea = await response.json()
+      onUpdate?.(updatedIdea)
       onOpenChange(false)
 
       toast({
         title: 'Success',
-        description: 'Idea created successfully',
+        description: 'Idea updated successfully',
       })
     } catch (error) {
-      console.error('Error creating idea:', error)
+      console.error('Error updating idea:', error)
       toast({
         title: 'Error',
-        description: 'Failed to create idea',
+        description: 'Failed to update idea',
         variant: 'destructive',
       })
     } finally {
@@ -133,7 +163,7 @@ export function CreateIdeaDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Create New Idea</DialogTitle>
+          <DialogTitle>Edit Idea</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
@@ -286,10 +316,10 @@ export function CreateIdeaDialog({
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
+                  Updating...
                 </>
               ) : (
-                'Create Idea'
+                'Update Idea'
               )}
             </Button>
           </div>
@@ -297,4 +327,4 @@ export function CreateIdeaDialog({
       </DialogContent>
     </Dialog>
   )
-}
+} 
