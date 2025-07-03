@@ -1,28 +1,29 @@
-import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { prisma } from '@/lib/db/client'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { prisma } from "@/lib/db/client"
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   context: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: "Unauthorized" },
         { status: 401 }
       )
     }
 
-    const { params } = context
-    const ideaId = params.id
+    const ideaId = context.params.id
+    const userId = session.user.id
 
+    // Check if user already liked the idea
     const existingLike = await prisma.like.findUnique({
       where: {
         userId_ideaId: {
-          userId: session.user.id,
+          userId,
           ideaId,
         },
       },
@@ -33,7 +34,7 @@ export async function POST(
       await prisma.like.delete({
         where: {
           userId_ideaId: {
-            userId: session.user.id,
+            userId,
             ideaId,
           },
         },
@@ -43,16 +44,51 @@ export async function POST(
       // Like if not already liked
       await prisma.like.create({
         data: {
-          userId: session.user.id,
+          userId,
           ideaId,
         },
       })
       return NextResponse.json({ liked: true })
     }
   } catch (error) {
-    console.error('Error handling like:', error)
+    console.error("Error toggling like:", error)
     return NextResponse.json(
-      { error: 'Failed to handle like' },
+      { error: "Failed to toggle like" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    const ideaId = context.params.id
+    const userId = session.user.id
+
+    const like = await prisma.like.findUnique({
+      where: {
+        userId_ideaId: {
+          userId,
+          ideaId,
+        },
+      },
+    })
+
+    return NextResponse.json({ liked: !!like })
+  } catch (error) {
+    console.error("Error checking like status:", error)
+    return NextResponse.json(
+      { error: "Failed to check like status" },
       { status: 500 }
     )
   }

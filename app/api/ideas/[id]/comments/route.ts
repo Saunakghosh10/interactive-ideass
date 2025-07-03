@@ -1,19 +1,21 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/db/client'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 
 // GET comments for an idea
 export async function GET(
-  request: Request,
+  request: NextRequest,
   context: { params: { id: string } }
 ) {
   try {
-    const { params } = context
-    const ideaId = params.id
+    const ideaId = context.params.id
 
     const comments = await prisma.comment.findMany({
       where: { ideaId },
+      orderBy: {
+        createdAt: 'desc',
+      },
       include: {
         author: {
           select: {
@@ -23,7 +25,6 @@ export async function GET(
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
     })
 
     return NextResponse.json(comments)
@@ -38,7 +39,7 @@ export async function GET(
 
 // POST a new comment
 export async function POST(
-  request: Request,
+  request: NextRequest,
   context: { params: { id: string } }
 ) {
   try {
@@ -47,8 +48,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { params } = context
-    const ideaId = params.id
+    const ideaId = context.params.id
     const { content } = await request.json()
 
     if (!content?.trim()) {
